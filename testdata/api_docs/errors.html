@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head><title>Tidewatch API – Error Codes</title><style>body{font-family:sans-serif}</style></head>
+<body>
+<nav>Home | Docs | Status</nav>
+<h1>Error Codes</h1>
+<p>Errors are returned as JSON objects with the fields <code>code</code>, <code>message</code> and
+<code>request_id</code>. Always include the <code>request_id</code> when contacting support.</p>
+<h2>Client Errors</h2>
+<table>
+<tr><th>Code</th><th>HTTP</th><th>Meaning</th></tr>
+<tr><td>TW-400-PARAM</td><td>400</td><td>A query parameter is missing or malformed.</td></tr>
+<tr><td>TW-401-KEY</td><td>401</td><td>The API key is missing, unknown or revoked.</td></tr>
+<tr><td>TW-403-SCOPE</td><td>403</td><td>The OAuth token lacks the required scope.</td></tr>
+<tr><td>TW-403-BLOCKED</td><td>403</td><td>The key is temporarily blocked after ignoring rate limits.</td></tr>
+<tr><td>TW-404-STATION</td><td>404</td><td>The station ID does not exist or was decommissioned.</td></tr>
+<tr><td>TW-429-RATE</td><td>429</td><td>Rate limit exceeded; see the Retry-After header.</td></tr>
+</table>
+<h2>Server Errors</h2>
+<table>
+<tr><td>TW-500-INTERNAL</td><td>500</td><td>Unexpected server error. Safe to retry after a short delay.</td></tr>
+<tr><td>TW-503-BUOY-OFFLINE</td><td>503</td><td>The buoy has not reported for more than 2 hours; data may be stale.</td></tr>
+</table>
+<h3>Retrying</h3>
+<p>Only retry requests that failed with 429, 500 or 503. Never retry 400-level errors other than 429
+without changing the request.</p>
+<footer>© Brightwater Labs (fictional)</footer>
+</body>
+</html>

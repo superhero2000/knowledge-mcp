@@ -1,0 +1,42 @@
+# Retrieval evaluation set. One JSON object per line. Lines starting with # are ignored.
+# expected: the passage that must be retrieved (document + optional text snippet it must contain).
+{"id": "hb-01", "source": "handbook", "question": "How do I undo a bad deployment?", "expected": [{"document": "deployment.md", "contains": "bw deploy rollback"}]}
+{"id": "hb-02", "source": "handbook", "question": "When does the release train leave?", "expected": [{"document": "deployment.md", "contains": "Tuesday and Thursday"}]}
+{"id": "hb-03", "source": "handbook", "question": "What percentage of traffic does a canary get and for how long?", "expected": [{"document": "deployment.md", "contains": "5% of traffic"}]}
+{"id": "hb-04", "source": "handbook", "question": "Can we ship code during the Christmas holidays?", "expected": [{"document": "deployment.md", "contains": "December 20"}]}
+{"id": "hb-05", "source": "handbook", "question": "Who needs to approve dropping a database column?", "expected": [{"document": "deployment.md", "contains": "database owner"}]}
+{"id": "hb-06", "source": "handbook", "question": "How quickly must the status page be updated during a total outage?", "expected": [{"document": "incident-response.md", "contains": "SEV1"}]}
+{"id": "hb-07", "source": "handbook", "question": "What does the incident commander do?", "expected": [{"document": "incident-response.md", "contains": "does not debug"}]}
+{"id": "hb-08", "source": "handbook", "question": "deadline for writing a postmortem", "expected": [{"document": "incident-response.md", "contains": "five business days"}]}
+{"id": "hb-09", "source": "handbook", "question": "How much extra pay do I get for being on call?", "expected": [{"document": "oncall.md", "contains": "250 euros"}]}
+{"id": "hb-10", "source": "handbook", "question": "Which app sends pages to my phone?", "expected": [{"document": "oncall.md", "contains": "Foghorn"}]}
+{"id": "hb-11", "source": "handbook", "question": "I was woken up by pages several times last night, do I have to be in at 9?", "expected": [{"document": "oncall.md", "contains": "start work late"}]}
+{"id": "hb-12", "source": "handbook", "question": "How big may a pull request be?", "expected": [{"document": "code-review.md", "contains": "400 changed lines"}]}
+{"id": "hb-13", "source": "handbook", "question": "What does the prefix nit: mean in review comments?", "expected": [{"document": "code-review.md", "contains": "nit:"}]}
+{"id": "hb-14", "source": "handbook", "question": "Which licenses are not allowed for dependencies?", "expected": [{"document": "code-review.md", "contains": "AGPL"}]}
+{"id": "hb-15", "source": "handbook", "question": "Where do I keep database passwords?", "expected": [{"document": "security-basics.md", "contains": "Vault Keeper"}]}
+{"id": "hb-16", "source": "handbook", "question": "Is SMS two-factor authentication allowed?", "expected": [{"document": "security-basics.md", "contains": "SMS"}]}
+{"id": "hb-17", "source": "handbook", "question": "make bootstrap fails with a certificate error", "expected": [{"document": "onboarding.md", "contains": "bw certs refresh"}]}
+{"id": "hb-18", "source": "handbook", "question": "home office budget for new employees", "expected": [{"document": "onboarding.md", "contains": "400 euros"}]}
+{"id": "hb-19", "source": "handbook", "question": "When can a new hire get production access?", "expected": [{"document": "onboarding.md", "contains": "30 days"}]}
+{"id": "hb-20", "source": "handbook", "question": "vk://team/service/db-password", "expected": [{"document": "security-basics.md"}]}
+{"id": "api-01", "source": "api_docs", "question": "Which header carries the API key?", "expected": [{"document": "authentication.md", "contains": "X-Tidewatch-Key"}]}
+{"id": "api-02", "source": "api_docs", "question": "How long is an OAuth access token valid?", "expected": [{"document": "authentication.md", "contains": "1 hour"}]}
+{"id": "api-03", "source": "api_docs", "question": "How many requests per minute does the Pro plan allow?", "expected": [{"document": "rate-limits.md", "contains": "600"}]}
+{"id": "api-04", "source": "api_docs", "question": "What happens if I keep ignoring 429 responses?", "expected": [{"document": "rate-limits.md", "contains": "TW-403-BLOCKED"}]}
+{"id": "api-05", "source": "api_docs", "question": "TW-404-STATION", "expected": [{"document": "errors.html", "contains": "TW-404-STATION"}]}
+{"id": "api-06", "source": "api_docs", "question": "the buoy has stopped reporting and the API returns 503", "expected": [{"document": "errors.html", "contains": "TW-503-BUOY-OFFLINE"}]}
+{"id": "api-07", "source": "api_docs", "question": "How far ahead can I request a forecast?", "expected": [{"document": "endpoints/forecasts.md", "contains": "168"}]}
+{"id": "api-08", "source": "api_docs", "question": "how accurate are wave height predictions", "expected": [{"document": "endpoints/forecasts.md", "contains": "mean absolute error"}]}
+{"id": "api-09", "source": "api_docs", "question": "How are webhook payloads signed?", "expected": [{"document": "endpoints/forecasts.md", "contains": "HMAC-SHA256"}]}
+{"id": "api-10", "source": "api_docs", "question": "why is a station in maintenance status", "expected": [{"document": "endpoints/stations.md", "contains": "below 15%"}]}
+{"id": "api-11", "source": "api_docs", "question": "How do I turn off automatic retries in the Python client?", "expected": [{"document": "sdk-python.md", "contains": "max_retries"}]}
+{"id": "api-12", "source": "api_docs", "question": "enable debug logging in the SDK", "expected": [{"document": "sdk-python.md", "contains": "TIDEWATCH_LOG"}]}
+{"id": "rep-01", "source": "reports", "question": "What was the average uptime in the buoy trial?", "expected": [{"document": "kelp3-field-trial-2025.pdf", "contains": "99.1 percent"}]}
+{"id": "rep-02", "source": "reports", "question": "Why did buoys drift away during the trial?", "expected": [{"document": "kelp3-field-trial-2025.pdf", "contains": "swivels failed"}]}
+{"id": "rep-03", "source": "reports", "question": "How much does one Kelp-3 buoy cost to build?", "expected": [{"document": "kelp3-field-trial-2025.pdf", "contains": "4,850 euros"}]}
+{"id": "rep-04", "source": "reports", "question": "expected battery lifetime", "expected": [{"document": "kelp3-field-trial-2025.pdf", "contains": "seven years"}]}
+{"id": "rep-05", "source": "reports", "question": "Which firmware version fixed the frozen modem?", "expected": [{"document": "kelp3-field-trial-2025.pdf", "contains": "2.4.1"}]}
+{"id": "rep-06", "source": "reports", "question": "Which message queue was chosen for the forecast pipeline and why?", "expected": [{"document": "forecast-pipeline-v3-review.docx", "contains": "Current"}]}
+{"id": "rep-07", "source": "reports", "question": "How long does the current forecast batch take?", "expected": [{"document": "forecast-pipeline-v3-review.docx", "contains": "95 minutes"}]}
+{"id": "rep-08", "source": "reports", "question": "How will the pipeline cope with a queue backlog during storms?", "expected": [{"document": "forecast-pipeline-v3-review.docx", "contains": "Autoscale"}]}

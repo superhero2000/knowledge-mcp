@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>knowledge-mcp demo</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --term: #0b0f14; --line: #30363d;
+    --text: #c9d1d9; --dim: #8b949e; --green: #3fb950; --blue: #58a6ff;
+    --yellow: #e3b341; --red: #f85149; --accent: #a371f7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--text);
+    font-family: Inter, "DejaVu Sans", sans-serif; }
+  #stage { position: absolute; inset: 0; }
+
+  /* command scenes */
+  #top { position: absolute; left: 60px; right: 60px; top: 28px; height: 70px; display: flex; align-items: center; gap: 24px; }
+  #caption { font-size: 34px; font-weight: 600; color: #f0f6fc; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { font-size: 22px; font-weight: 600; color: var(--accent); border: 2px solid var(--accent); border-radius: 999px; padding: 6px 18px; white-space: nowrap; }
+  #termwrap { position: absolute; left: 60px; right: 60px; top: 112px; bottom: 64px; background: var(--term);
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  #termbar { height: 40px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 18px; gap: 9px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; }
+  #termtitle { flex: 1; text-align: center; color: var(--dim); font-size: 17px; margin-right: 60px; }
+  #term { position: absolute; top: 40px; left: 0; right: 0; bottom: 0; padding: 18px 26px; overflow: hidden;
+    font-family: "DejaVu Sans Mono", monospace; font-size: 18.5px; line-height: 1.38; white-space: pre-wrap; word-break: break-word; }
+  #terminner { position: absolute; left: 26px; right: 26px; }
+  .prompt { color: var(--green); font-weight: bold; }
+  .cmd { color: #f0f6fc; }
+  .out { color: var(--text); }
+  .hl { color: var(--yellow); background: rgba(227,179,65,.10); }
+  .err { color: var(--red); }
+  .cursor { display: inline-block; width: 11px; height: 22px; background: #f0f6fc; vertical-align: text-bottom; }
+  #bottom { position: absolute; left: 60px; right: 60px; bottom: 18px; height: 30px; display: flex; align-items: center; gap: 8px; }
+  .pip { flex: 1; height: 6px; border-radius: 3px; background: #21262d; }
+  .pip.done { background: #3d444d; }
+  .pip.now { background: var(--accent); }
+
+  /* title scenes */
+  #title { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 180px;
+    background: radial-gradient(1200px 700px at 75% 20%, rgba(163,113,247,.16), transparent 60%), var(--bg); }
+  #title h1 { font-family: "Inter Display", Inter, sans-serif; font-size: 96px; font-weight: 800; letter-spacing: -2px; color: #f0f6fc; }
+  #title h2 { font-size: 38px; font-weight: 500; color: var(--dim); margin-top: 18px; }
+  #title ul { list-style: none; margin-top: 56px; }
+  #title li { font-size: 32px; margin: 22px 0; color: var(--text); padding-left: 40px; position: relative; }
+  #title li::before { content: ""; position: absolute; left: 0; top: 14px; width: 14px; height: 14px; border-radius: 4px; background: var(--accent); }
+  #title li.mono { font-family: "DejaVu Sans Mono", monospace; font-size: 27px; }
+  #title .badge { position: absolute; top: 60px; right: 80px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+const SCENES = __SCENES__;
+const PROMPT = "~/knowledge-mcp $ ";
+const TYPE_CPS = 42, LINES_PS = 30;
+
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+// ---- timeline -------------------------------------------------------------
+let t0 = 0;
+for (const s of SCENES) {
+  s.start = t0;
+  if (s.type === "title") {
+    s.bulletAt = s.bullets.map((_, i) => 1.0 + i * 0.9);
+    s.dur = 2.6 + s.bullets.length * 0.9 + (s.heading === "Requirements covered" ? 6 : 2.4);
+  } else {
+    const lines = s.out ? s.out.split("\n") : [];
+    s.lines = lines;
+    s.typeDur = Math.min(4.5, s.cmd.length / TYPE_CPS);
+    s.outAt = 0.7 + s.typeDur + 0.45;
+    s.revealDur = Math.min(1.6, lines.length / LINES_PS);
+    const hold = Math.min(9, 3.2 + lines.length * 0.13 + (s.highlight.length ? 0.6 : 0));
+    s.dur = s.outAt + s.revealDur + hold;
+  }
+  t0 += s.dur;
+}
+window.TOTAL = t0;
+
+function isHl(line, s) {
+  return s.highlight.some(h => new RegExp(h).test(line));
+}
+
+// ---- rendering --------------------------------------------------------------
+const stage = document.getElementById("stage");
+let lastKey = null;
+
+function pips(idx) {
+  return SCENES.map((_, i) => `<div class="pip ${i < idx ? "done" : i === idx ? "now" : ""}"></div>`).join("");
+}
+
+function renderTitle(s, local) {
+  const n = s.bulletAt.filter(a => local >= a).length;
+  const key = `T|${s.heading}|${n}`;
+  if (key === lastKey) return key;
+  const mono = s.heading === "Architecture";
+  stage.innerHTML = `<div id="title">
+      ${s.req ? `<div class="badge">${esc(s.req)}</div>` : ""}
+      <h1>${esc(s.heading)}</h1>${s.sub ? `<h2>${esc(s.sub)}</h2>` : ""}
+      <ul>${s.bullets.slice(0, n).map(b => `<li class="${mono ? "mono" : ""}">${esc(b)}</li>`).join("")}</ul>
+    </div>`;
+  return key;
+}
+
+function renderCmd(s, idx, local) {
+  const typed = Math.max(0, Math.min(s.cmd.length, Math.floor((local - 0.7) * TYPE_CPS)));
+  const shown = local < s.outAt ? 0 : Math.min(s.lines.length, Math.ceil((local - s.outAt) * LINES_PS));
+  const done = local >= s.outAt + s.revealDur;
+  const blink = Math.floor(local / 0.55) % 2 === 0;
+  const key = `C|${idx}|${typed}|${shown}|${done ? (blink ? 1 : 0) : "x"}|${local < s.outAt && typed === s.cmd.length ? (blink ? 1 : 0) : ""}`;
+  if (key === lastKey) return key;
+
+  let html = `<span class="prompt">${esc(PROMPT)}</span><span class="cmd">${esc(s.cmd.slice(0, typed))}</span>`;
+  if (local < s.outAt) html += `<span class="cursor" style="opacity:${typed < s.cmd.length || blink ? 1 : 0}"></span>`;
+  if (shown > 0) {
+    html += "\n" + s.lines.slice(0, shown).map(l => {
+      const cls = s.exit !== 0 && /error/i.test(l) ? "err" : isHl(l, s) ? "hl" : "out";
+      return `<span class="${cls}">${esc(l) || " "}</span>`;
+    }).join("\n");
+  }
+  if (done) html += `\n<span class="prompt">${esc(PROMPT)}</span><span class="cursor" style="opacity:${blink ? 1 : 0}"></span>`;
+
+  stage.innerHTML = `
+    <div id="top"><div id="caption">${esc(s.caption)}</div>${s.req ? `<div class="badge">${esc(s.req)}</div>` : ""}</div>
+    <div id="termwrap">
+      <div id="termbar"><div class="dot" style="background:#ff5f57"></div><div class="dot" style="background:#febc2e"></div>
+        <div class="dot" style="background:#28c840"></div><div id="termtitle">knowledge-mcp — bash</div></div>
+      <div id="term"><div id="terminner">${html}</div></div>
+    </div>
+    <div id="bottom">${pips(idx)}</div>`;
+  // shrink the font for tall outputs so the command line stays visible
+  const fit = Math.min(18.5, (860 / (s.lines.length + 3)) / 1.38);
+  document.getElementById("term").style.fontSize = fit + "px";
+  // keep the newest lines visible when output is taller than the terminal
+  const term = document.getElementById("term"), inner = document.getElementById("terminner");
+  const avail = term.clientHeight - 36;
+  inner.style.top = (inner.scrollHeight > avail ? 18 - (inner.scrollHeight - avail) : 18) + "px";
+  return key;
+}
+
+window.renderAt = function (t) {
+  let idx = SCENES.findIndex(s => t >= s.start && t < s.start + s.dur);
+  if (idx < 0) idx = SCENES.length - 1;
+  const s = SCENES[idx], local = t - s.start;
+  lastKey = s.type === "title" ? renderTitle(s, local) : renderCmd(s, idx, local);
+  return lastKey;
+};
+window.renderAt(0);
+</script>
+</body>
+</html>
