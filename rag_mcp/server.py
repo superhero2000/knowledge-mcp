@@ -273,7 +273,8 @@ def build_server(app: App):
 
 
 def _is_loopback(host: str) -> bool:
-    if host in ("localhost", ""):
+    # Note: an empty host is NOT loopback; binding to "" listens on every interface.
+    if host == "localhost":
         return True
     try:
         return ipaddress.ip_address(host).is_loopback

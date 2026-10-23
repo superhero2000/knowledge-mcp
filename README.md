@@ -148,6 +148,10 @@ knowledge = MCPServerStdio(params={"command": "/abs/path/.venv/bin/knowledge-mcp
 
 ### HTTP transport and security
 
+For the architecture and the full security model (including how outbound traffic is restricted to
+the configured endpoint), see [documentation.md](documentation.md).
+
+
 `knowledge-mcp --transport streamable-http [--host 127.0.0.1] [--port 8765]` serves at `/mcp`.
 `--transport sse` serves at `/sse`. You can also set this in the `[server]` section of the
 config. **The HTTP transport has no authentication.** It binds to `127.0.0.1`, and the server
@@ -285,13 +289,14 @@ pip install -e ".[docx,dev]"
 pytest -q
 ```
 
-The 54 tests run fully offline against a fake OpenAI-compatible HTTP endpoint
+The 67 tests run fully offline against a fake OpenAI-compatible HTTP endpoint
 (`tests/fake_openai.py`). That also exercises the config-only provider switch. They cover
 extraction for every format, chunking, incremental indexing, the model lock and re-embedding,
 all search modes, paging, citations, both rerank methods, the evaluation, and real MCP
 sessions over stdio, streamable HTTP and SSE. The MCP tests include every Q&A confirmation
 mode, with clients that do and don't support elicitation, plus structured output, the
-prompt, and config discovery. They pass with MCP SDK 1.x and 2.x.
+prompt, and config discovery. Security tests check that no request ever reaches a host
+other than the configured endpoint. They pass with MCP SDK 1.x and 2.x.
 `examples/demo_client.py` runs example tool calls through a real stdio MCP session.
 
 ## Requirement map

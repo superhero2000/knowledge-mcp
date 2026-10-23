@@ -11,6 +11,8 @@ import logging
 import os
 from typing import Protocol, Sequence
 
+from urllib.parse import urlsplit
+
 import httpx
 import numpy as np
 
@@ -38,6 +40,35 @@ class Provider(Protocol):
     def rerank(self, query: str, documents: Sequence[str], *, model: str, path: str) -> list[float]: ...
 
 
+def _origin(url) -> tuple[str, str, int]:
+    """(scheme, host, port) of a URL string or httpx.URL, with default ports filled in."""
+    u = urlsplit(str(url))
+    scheme = (u.scheme or "").lower()
+    port = u.port or {"https": 443, "http": 80}.get(scheme, 0)
+    return scheme, (u.hostname or "").lower(), port
+
+
+def egress_guard(base_url: str):
+    """httpx request hook that only lets requests through to the configured endpoint's origin.
+
+    httpx runs request hooks for every request it sends, including each hop of a redirect,
+    so a redirect (or a misconfigured path) can never send document text or the API key to
+    another host. The OpenAI SDK follows redirects by default; this closes that path.
+    """
+    allowed = _origin(base_url)
+
+    def check(request: httpx.Request) -> None:
+        target = _origin(request.url)
+        if target != allowed:
+            log.error("Blocked outbound request to %s://%s:%s (only %s://%s:%s is allowed)", *target, *allowed)
+            raise ProviderError(
+                f"Blocked outbound request to {target[0]}://{target[1]}:{target[2]}: "
+                f"only the configured endpoint {allowed[0]}://{allowed[1]}:{allowed[2]} is allowed"
+            )
+
+    return check
+
+
 def normalize(vectors: np.ndarray) -> np.ndarray:
     vectors = np.asarray(vectors, dtype=np.float32)
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
@@ -60,7 +91,12 @@ class OpenAICompatibleProvider:
             api_key = "not-set"
         self._api_key = api_key
         verify: bool | str = cfg.ca_bundle if cfg.ca_bundle else cfg.verify_ssl
-        self._http = httpx.Client(verify=verify, timeout=cfg.timeout_s)
+        if verify is False:
+            log.warning("TLS certificate verification is DISABLED for %s (provider.verify_ssl = false)", cfg.base_url)
+        # Every request (including redirect hops) must go to the configured endpoint.
+        self._http = httpx.Client(
+            verify=verify, timeout=cfg.timeout_s, event_hooks={"request": [egress_guard(cfg.base_url)]}
+        )
         self.client = OpenAI(
             base_url=cfg.base_url,
             api_key=api_key,

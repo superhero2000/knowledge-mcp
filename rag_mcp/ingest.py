@@ -79,9 +79,15 @@ class Indexer:
         if not root.is_dir():
             return []
         found: dict[str, Path] = {}
+        real_root = root.resolve()
         for pattern in include:
             for p in root.glob(pattern):
                 if not p.is_file() or p.suffix.lower() not in suffixes:
+                    continue
+                # Never follow a symlink out of the source folder: everything indexed is sent
+                # to the embedding endpoint, so only files under the configured path may be read.
+                if not p.resolve().is_relative_to(real_root):
+                    log.warning("Skipping %s: it resolves outside the source folder %s", p, root)
                     continue
                 rel = p.relative_to(root).as_posix()
                 if any(part.startswith(".") for part in Path(rel).parts):

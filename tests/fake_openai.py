@@ -72,8 +72,15 @@ class _Handler(BaseHTTPRequestHandler):
         req = json.loads(self.rfile.read(length) or b"{}")
         stats = self.server.stats  # type: ignore[attr-defined]
         path = self.path.rstrip("/")
+        stats["requests"] = stats.get("requests", 0) + 1
         if self.server.fail:  # type: ignore[attr-defined]
             return self._send(500, {"error": {"message": "simulated outage"}})
+        if self.server.redirect_to:  # type: ignore[attr-defined]
+            self.send_response(307)  # 307 keeps method and body: a redirect would re-send the documents
+            self.send_header("Location", self.server.redirect_to + self.path)  # type: ignore[attr-defined]
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if path.endswith("/embeddings"):
             inputs = req["input"] if isinstance(req["input"], list) else [req["input"]]
             stats["embedding_requests"] += 1
@@ -113,6 +120,7 @@ class FakeOpenAI:
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self.httpd.stats = {"embedding_requests": 0, "embedded_texts": 0, "chat_requests": 0, "rerank_requests": 0}
         self.httpd.fail = False
+        self.httpd.redirect_to = None
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
 
     @property
@@ -122,6 +130,10 @@ class FakeOpenAI:
     @property
     def stats(self) -> dict:
         return self.httpd.stats
+
+    def set_redirect(self, target: str | None) -> None:
+        """Answer every request with a 307 redirect to `target` (an origin like http://127.0.0.1:1234)."""
+        self.httpd.redirect_to = target
 
     def set_failing(self, fail: bool) -> None:
         self.httpd.fail = fail
