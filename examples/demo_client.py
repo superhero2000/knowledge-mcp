@@ -1,4 +1,4 @@
-"""Talk to the MCP server exactly like Cline does (stdio) and run a few example calls.
+"""Talk to the MCP server like any stdio MCP client does and run a few example calls.
 
 Usage:  python examples/demo_client.py [--config config.toml]
 Requires an indexed knowledge base (`rag index`) and the provider API key in the environment.

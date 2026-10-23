@@ -164,13 +164,30 @@ def cmd_check(args) -> int:
 def cmd_serve(args) -> int:
     from .server import main as serve_main
 
-    serve_main((["--config", args.config] if args.config else []))
+    serve_main((["--config", args.config] if args.config else []) + list(args.serve_args or []))
+    return 0
+
+
+def cmd_init(args) -> int:
+    from importlib.resources import files
+
+    from .config import user_config_dir
+
+    target = Path(args.path).expanduser() if args.path else user_config_dir() / "config.toml"
+    if target.exists() and not args.force:
+        print(f"{target} already exists (use --force to overwrite)", file=sys.stderr)
+        return 1
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(files("rag_mcp").joinpath("config_template.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"wrote {target}")
+    print("Next: edit [[sources]] and [provider], set the API key variable, then run `rag index`.")
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="rag", description="Local RAG knowledge base for Cline (MCP)")
-    p.add_argument("--config", help="Path to config.toml (default: $RAG_CONFIG or ./config.toml)")
+    p = argparse.ArgumentParser(prog="rag", description="knowledge-mcp: local RAG knowledge base served over MCP")
+    p.add_argument("--config", help="Path to config.toml (default: $KNOWLEDGE_MCP_CONFIG, ./config.toml, "
+                                    "then the per-user config folder)")
     p.add_argument("-v", "--verbose", action="store_true", help="Show progress")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -228,8 +245,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--chat", action="store_true", help="Also test the chat model")
     s.set_defaults(func=cmd_check)
 
-    s = sub.add_parser("serve", help="Run the MCP server on stdio (same as rag-mcp)")
+    s = sub.add_parser("serve", help="Run the MCP server (same as knowledge-mcp); extra args are passed through, "
+                                     "e.g. rag serve --transport streamable-http --port 8765")
+    s.add_argument("serve_args", nargs=argparse.REMAINDER)
     s.set_defaults(func=cmd_serve)
+
+    s = sub.add_parser("init", help="Create a starter config.toml (default: the per-user config folder)")
+    s.add_argument("--path", help="Where to write it instead")
+    s.add_argument("--force", action="store_true", help="Overwrite an existing file")
+    s.set_defaults(func=cmd_init)
     return p
 
 

@@ -1,4 +1,4 @@
-"""End-to-end: spawn the MCP server over stdio (as Cline does) and call its tools."""
+"""End-to-end: spawn the MCP server over stdio (as MCP clients do) and call its tools."""
 
 import asyncio
 import os

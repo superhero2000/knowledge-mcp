@@ -69,11 +69,29 @@ class RerankConfig:
     candidates: int = 30
 
 
+QA_CONFIRMATION_MODES = ("auto", "elicitation", "tool_approval", "cli")
+
+
 @dataclass
 class QAConfig:
-    # When true, the MCP save tool is disabled and Q&A pairs can only be
-    # approved from the command line (`rag qa approve <id>`).
-    cli_confirmation_only: bool = False
+    # How a proposed Q&A pair gets the user's confirmation (R10):
+    #   auto          - ask via MCP elicitation if the client supports it, else rely on tool approval
+    #   elicitation   - only via MCP elicitation; clients without it must use the CLI
+    #   tool_approval - the client's tool-call approval of save_qa is the confirmation
+    #   cli           - only `rag qa approve <id>` in a terminal
+    confirmation: str = "auto"
+    cli_confirmation_only: bool = False  # deprecated alias for confirmation = "cli"
+
+
+TRANSPORTS = ("stdio", "streamable-http", "sse")
+
+
+@dataclass
+class ServerConfig:
+    transport: str = "stdio"  # stdio | streamable-http | sse
+    host: str = "127.0.0.1"
+    port: int = 8765
+    allow_remote: bool = False  # HTTP has no authentication: binding beyond localhost must be explicit
 
 
 @dataclass
@@ -97,6 +115,7 @@ class Config:
     search: SearchConfig
     rerank: RerankConfig
     qa: QAConfig
+    server: ServerConfig
     sources: list[SourceConfig]
 
     def source(self, name: str) -> SourceConfig:
@@ -121,16 +140,50 @@ def _build(cls, data: dict | None, section: str):
     return cls(**data)
 
 
+APP_NAME = "knowledge-mcp"
+
+
+def user_config_dir() -> Path:
+    """Per-user config folder (MCP clients start servers from arbitrary working directories)."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    return base / APP_NAME
+
+
+def config_candidates() -> list[Path]:
+    """Lookup order when no --config is given."""
+    out = []
+    for env in ("KNOWLEDGE_MCP_CONFIG", "RAG_CONFIG"):
+        if os.environ.get(env):
+            return [Path(os.path.expanduser(os.environ[env]))]
+    out.append(Path.cwd() / "config.toml")
+    out.append(user_config_dir() / "config.toml")
+    return out
+
+
 def default_config_path() -> Path:
-    return Path(os.environ.get("RAG_CONFIG", "config.toml"))
+    candidates = config_candidates()
+    for p in candidates:
+        if p.is_file():
+            return p
+    return candidates[0]
 
 
 def load_config(path: str | os.PathLike | None = None) -> Config:
-    cfg_path = Path(path) if path else default_config_path()
+    if path:
+        cfg_path = Path(os.path.expanduser(str(path)))
+        searched = [cfg_path]
+    else:
+        searched = config_candidates()
+        cfg_path = next((p for p in searched if p.is_file()), searched[0])
     if not cfg_path.is_file():
         raise ConfigError(
-            f"Config file not found: {cfg_path.resolve()} "
-            "(pass --config or set RAG_CONFIG; see config.example.toml)"
+            "Config file not found. Looked in: " + ", ".join(str(p) for p in searched)
+            + ". Pass --config, set KNOWLEDGE_MCP_CONFIG, or create one with `rag init`."
         )
     cfg_path = cfg_path.resolve()
     base = cfg_path.parent
@@ -156,6 +209,14 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
     search = _build(SearchConfig, raw.get("search"), "search")
     if search.default_mode not in SEARCH_MODES:
         raise ConfigError(f"search.default_mode must be one of {SEARCH_MODES}")
+    qa = _build(QAConfig, raw.get("qa"), "qa")
+    if qa.cli_confirmation_only:
+        qa.confirmation = "cli"
+    if qa.confirmation not in QA_CONFIRMATION_MODES:
+        raise ConfigError(f"qa.confirmation must be one of {QA_CONFIRMATION_MODES}")
+    server = _build(ServerConfig, raw.get("server"), "server")
+    if server.transport not in TRANSPORTS:
+        raise ConfigError(f"server.transport must be one of {TRANSPORTS}")
     rerank = _build(RerankConfig, raw.get("rerank"), "rerank")
     if rerank.method not in ("llm", "endpoint"):
         raise ConfigError("rerank.method must be 'llm' or 'endpoint'")
@@ -191,6 +252,7 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
         chunking=_build(ChunkingConfig, raw.get("chunking"), "chunking"),
         search=search,
         rerank=rerank,
-        qa=_build(QAConfig, raw.get("qa"), "qa"),
+        qa=qa,
+        server=server,
         sources=sources,
     )
