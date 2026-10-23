@@ -1,0 +1,76 @@
+# knowledge-mcp configuration (created by `rag init`).
+# Relative paths are resolved against the directory of this file.
+
+[storage]
+db_path     = "data/rag.sqlite"      # single local SQLite file (R1)
+extract_dir = "data/extracted"       # one JSON per document (R8)
+qa_dir      = "data/qa"              # confirmed Q&A entries, one JSON each (R10)
+eval_dir    = "eval"                 # questions.jsonl + runs/
+
+# ---------------------------------------------------------------------------
+# Model provider (R2). Any OpenAI-compatible endpoint. Switching providers is a
+# config change only. If you switch the *embedding model*, the model lock (R9)
+# stops you until you run `rag reembed --switch-model`.
+# ---------------------------------------------------------------------------
+[provider]
+base_url             = "https://api.openai.com/v1"
+api_key_env          = "OPENAI_API_KEY"      # name of the env var holding the key
+embedding_model      = "text-embedding-3-small"
+embedding_dimensions = 0                     # 0 = model default
+chat_model           = "gpt-4o-mini"         # only used for optional LLM reranking
+embed_batch_size     = 64
+timeout_s            = 60
+max_retries          = 3
+verify_ssl           = true
+ca_bundle            = ""                    # e.g. "C:/certs/corp-ca.pem" for the internal endpoint
+# extra_headers      = { "X-Team" = "docs" }
+
+# --- Internal endpoint (production) - example, replace the block above: ---
+# [provider]
+# base_url        = "https://llm-gateway.internal.example/v1"
+# api_key_env     = "INTERNAL_LLM_API_KEY"
+# embedding_model = "bge-m3"
+# chat_model      = "llama-3.3-70b-instruct"
+# ca_bundle       = "/etc/ssl/certs/corp-ca.pem"
+
+[chunking]
+max_chars     = 1500
+overlap_chars = 200
+min_chars     = 200
+
+[search]
+default_mode      = "hybrid"   # hybrid | semantic | keyword | exact (R5)
+default_top_k     = 5
+max_top_k         = 50         # upper bound the model may request (R6)
+candidate_pool    = 100        # candidates per retriever before fusion / paging
+rrf_k             = 60
+semantic_weight   = 1.0
+keyword_weight    = 1.0
+max_snippet_chars = 2000
+
+[rerank]
+enabled       = false   # default when the model does not pass rerank=true
+method        = "llm"   # "llm" = chat model scores passages; "endpoint" = POST {base_url}/rerank
+model         = ""      # endpoint: reranker model (e.g. "bge-reranker-v2-m3"); llm: defaults to chat_model
+endpoint_path = "/rerank"
+candidates    = 30
+
+[qa]
+confirmation = "auto"   # auto | elicitation | tool_approval | cli (see README)
+
+[server]
+transport    = "stdio"      # stdio | streamable-http | sse
+host         = "127.0.0.1"
+port         = 8765
+allow_remote = false        # HTTP has no authentication
+
+# ---------------------------------------------------------------------------
+# Sources: each becomes one MCP tool `search_<name>` (R4).
+# Relative paths are resolved against this file's folder; ~ is expanded.
+# ---------------------------------------------------------------------------
+[[sources]]
+name        = "docs"
+description = "Describe what this source contains, so the model knows when to search it."
+path        = "~/Documents/knowledge"
+include     = ["**/*.md", "**/*.pdf", "**/*.docx", "**/*.html", "**/*.txt"]
+exclude     = []

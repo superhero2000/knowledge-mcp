@@ -1,85 +1,174 @@
 # knowledge-mcp
 
-A local RAG knowledge base for **Cline**, exposed as an **MCP server over stdio**.
+A local RAG knowledge base served over the **Model Context Protocol (MCP)**. It works
+with any MCP-compatible client, including Claude Desktop, Claude Code, VS Code (GitHub
+Copilot), Cursor, Windsurf, Cline, Continue, Codex CLI, Gemini CLI, LibreChat, the OpenAI
+Agents SDK and the MCP Inspector. It uses only the standard MCP protocol, with nothing
+specific to any one client.
+
 Pure Python, a single SQLite file, no Docker, no cloud database. Only embedding and
 optional chat (reranking) calls go to an OpenAI-compatible model provider.
 
 ```
- Cline ──stdio──► rag-mcp (MCP server) ──► SQLite file (chunks, FTS5, vectors, Q&A)
-                        │                         ▲
-                        │                         │ rag index (manual)
-                        ▼                         │
-          OpenAI-compatible endpoint     files ─► extraction JSON ─► chunks ─► embeddings
-          (OpenAI now, internal later)
+ any MCP client ──stdio or HTTP──► knowledge-mcp ──► SQLite file (chunks, FTS5, vectors, Q&A)
+                                        │                    ▲
+                                        │                    │ rag index (manual)
+                                        ▼                    │
+                  OpenAI-compatible endpoint      files ─► extraction JSON ─► chunks ─► embeddings
+                  (OpenAI now, internal later)
 ```
 
-## Setup (no containers)
+## Install (no containers)
 
 Requires Python ≥ 3.10.
 
 ```bash
+git clone https://github.com/superhero2000/knowledge-mcp
 cd knowledge-mcp
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -e ".[docx]"             # add ,dev for tests: pip install -e ".[docx,dev]"
-
-cp config.example.toml config.toml   # then edit sources / provider
-export OPENAI_API_KEY=sk-...         # Windows: set OPENAI_API_KEY=sk-...
-
-rag check --chat     # verify the provider
-rag index -v         # extract, chunk, embed
-rag status
-rag search handbook "how do I roll back a release?"
 ```
 
-The shipped `config.toml` points at the synthetic test data in `testdata/` (R3).
-Regenerate the PDF/DOCX test files with `python testdata/make_testdata.py`.
+Or install it as an isolated tool, without cloning:
+`pipx install git+https://github.com/superhero2000/knowledge-mcp`, then add DOCX support with
+`pipx inject knowledge-mcp python-docx`. The repository is private, so git needs access to it.
 
-## Connect Cline
+### Configure
 
-In Cline → *MCP Servers* → *Configure* (`cline_mcp_settings.json`):
+```bash
+rag init                             # writes a starter config to your per-user config folder
+export OPENAI_API_KEY=sk-...         # Windows: set OPENAI_API_KEY=sk-...
+rag check --chat                     # verify the provider
+rag index -v                         # extract, chunk, embed
+rag search docs "how do I ...?"
+```
+
+The server finds its config in this order. The order matters because MCP clients start
+servers from arbitrary working directories:
+
+1. `--config PATH`
+2. `$KNOWLEDGE_MCP_CONFIG` (or the older `$RAG_CONFIG`)
+3. `./config.toml` in the working directory
+4. The per-user folder: `~/.config/knowledge-mcp/config.toml` (Linux),
+   `~/Library/Application Support/knowledge-mcp/config.toml` (macOS),
+   `%APPDATA%\knowledge-mcp\config.toml` (Windows)
+
+To try it on the bundled synthetic test data instead, run the commands from the repo folder:
+its `config.toml` points at `testdata/` (R3). Regenerate the PDF/DOCX test files with
+`python testdata/make_testdata.py`.
+
+## Connect an MCP client
+
+Every client needs the same three things:
+
+| | stdio (client starts the server) | HTTP (client connects to a URL) |
+|---|---|---|
+| command | `/abs/path/.venv/bin/knowledge-mcp` (Windows: `...\.venv\Scripts\knowledge-mcp.exe`) | start once: `knowledge-mcp --transport streamable-http` |
+| args | `["--config", "/abs/path/config.toml"]` (optional, see lookup order) | |
+| env | `OPENAI_API_KEY` (and `HTTPS_PROXY` / `SSL_CERT_FILE` behind a proxy) | set in the shell that starts the server |
+| URL | | `http://127.0.0.1:8765/mcp` (SSE: `--transport sse`, `http://127.0.0.1:8765/sse`) |
+
+Use **absolute paths**. Pass the API key in the client's `env`: most clients start servers
+with only a minimal environment. If you can't run the launcher (`knowledge-mcp`), use the
+interpreter instead: command `/abs/path/.venv/bin/python`, args `["-m", "rag_mcp.server", ...]`.
+
+Client config formats change between versions. If a snippet below doesn't match yours,
+check your client's MCP documentation: the command, args, env and URL stay the same.
+
+**Claude Desktop** (`claude_desktop_config.json`), **Cursor** (`~/.cursor/mcp.json` or
+`.cursor/mcp.json`), **Windsurf** (`~/.codeium/windsurf/mcp_config.json`), **Cline**
+(`cline_mcp_settings.json`), **Gemini CLI** (`~/.gemini/settings.json`):
 
 ```json
 {
   "mcpServers": {
     "knowledge": {
-      "command": "/abs/path/knowledge-mcp/.venv/bin/rag-mcp",
-      "args": ["--config", "/abs/path/knowledge-mcp/config.toml"],
-      "env": { "OPENAI_API_KEY": "sk-..." },
-      "autoApprove": ["search_handbook", "search_api_docs", "search_reports", "search_qa",
-                      "list_sources", "get_context"],
-      "disabled": false
+      "command": "/abs/path/knowledge-mcp/.venv/bin/knowledge-mcp",
+      "args": ["--config", "/abs/path/config.toml"],
+      "env": { "OPENAI_API_KEY": "sk-..." }
     }
   }
 }
 ```
 
-On Windows use `C:\\path\\knowledge-mcp\\.venv\\Scripts\\rag-mcp.exe`.
-Put everything the server needs in `env`: the API key and, behind a corporate proxy,
-`HTTPS_PROXY` / `SSL_CERT_FILE`. MCP clients start servers with only a minimal environment.
-**Do not auto-approve `save_qa`.** Cline's approval prompt is the user's confirmation (R10).
+**Claude Code**:
 
-Optional `.clinerules` snippet:
-
-```
-When answering questions about our docs, use the local-rag search tools. Cite every fact
-with the "Cite as" string of the passage it came from. If the first page of results is not
-enough, page with offset or switch mode (exact for codes/identifiers).
+```bash
+claude mcp add knowledge --env OPENAI_API_KEY=sk-... -- /abs/path/.venv/bin/knowledge-mcp --config /abs/path/config.toml
+# or, with the server already running over HTTP:
+claude mcp add --transport http knowledge http://127.0.0.1:8765/mcp
 ```
 
-## MCP tools
+**VS Code / GitHub Copilot** (`.vscode/mcp.json`). This format can prompt for the key
+instead of storing it:
 
-| Tool | Purpose |
-|---|---|
-| `search_<source>` | One per configured source (R4). Args: `query`, `mode` (`hybrid`\|`semantic`\|`keyword`\|`exact`), `top_k`, `offset`, `rerank`, `case_sensitive` |
-| `search_qa` | Search the confirmed Q&A base |
-| `get_context` | Full chunk plus its neighbours (`chunk_id`, `window`) |
-| `list_sources` | Sources, sizes, embedding model |
-| `propose_qa` | Store a Q&A pair as *pending* (not searchable) |
-| `save_qa` | Save a pending pair; call only after the user confirms (hidden when `qa.cli_confirmation_only = true`) |
-| `reject_qa` | Discard a pending pair |
+```json
+{
+  "inputs": [{ "type": "promptString", "id": "openai-key", "description": "OpenAI API key", "password": true }],
+  "servers": {
+    "knowledge": {
+      "type": "stdio",
+      "command": "/abs/path/knowledge-mcp/.venv/bin/knowledge-mcp",
+      "args": ["--config", "/abs/path/config.toml"],
+      "env": { "OPENAI_API_KEY": "${input:openai-key}" }
+    }
+  }
+}
+```
 
-Each hit looks like this:
+**Codex CLI** (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.knowledge]
+command = "/abs/path/knowledge-mcp/.venv/bin/knowledge-mcp"
+args = ["--config", "/abs/path/config.toml"]
+env = { OPENAI_API_KEY = "sk-..." }
+```
+
+**LibreChat** (`librechat.yaml`):
+
+```yaml
+mcpServers:
+  knowledge:
+    type: streamable-http
+    url: http://127.0.0.1:8765/mcp
+```
+
+**OpenAI Agents SDK** (Python):
+
+```python
+from agents.mcp import MCPServerStdio
+knowledge = MCPServerStdio(params={"command": "/abs/path/.venv/bin/knowledge-mcp",
+                                   "args": ["--config", "/abs/path/config.toml"]})
+```
+
+**MCP Inspector** (to debug the server):
+`npx @modelcontextprotocol/inspector /abs/path/.venv/bin/knowledge-mcp --config /abs/path/config.toml`
+
+### HTTP transport and security
+
+`knowledge-mcp --transport streamable-http [--host 127.0.0.1] [--port 8765]` serves at `/mcp`.
+`--transport sse` serves at `/sse`. You can also set this in the `[server]` section of the
+config. **The HTTP transport has no authentication.** It binds to `127.0.0.1`, and the server
+refuses other addresses unless you pass `--allow-remote` (or set `server.allow_remote = true`).
+Only do that behind an authenticating reverse proxy. Prefer stdio for a single user.
+
+## MCP features
+
+| Feature | Name | Purpose |
+|---|---|---|
+| tool | `search_<source>` | One per configured source (R4). Args: `query`, `mode` (`hybrid`\|`semantic`\|`keyword`\|`exact`), `top_k`, `offset`, `rerank`, `case_sensitive`. Returns text for the model plus `structuredContent` (JSON) |
+| tool | `search_qa` | Search the confirmed Q&A base |
+| tool | `get_context` | Full chunk plus its neighbours (`chunk_id`, `window`) |
+| tool | `list_sources` | Sources, sizes, embedding model |
+| tool | `propose_qa` | Propose a Q&A pair; the user is asked to confirm (see below) |
+| tool | `save_qa` | Save a pending pair after confirmation (only in `auto` / `tool_approval` mode) |
+| tool | `reject_qa` | Discard a pending pair |
+| prompt | `answer_with_citations` | Ready-made instruction to answer a question with cited sources (shown as a slash command or prompt template in many clients) |
+
+Search and listing tools are annotated `readOnlyHint`, so clients that support annotations
+can auto-approve them safely. Each hit looks like this:
 
 ```
 [1] deployment.md — Deployment Process > Rollback  (score 0.0328, chunk_id 12)
@@ -89,10 +178,24 @@ To roll back, run `bw deploy rollback <service> --to <version>` ...
 More results available: call again with offset=5.
 ```
 
+### Confirming Q&A entries in any client (R10)
+
+`qa.confirmation` in the config decides how the user confirms a proposed Q&A entry:
+
+| Mode | Behaviour |
+|---|---|
+| `auto` (default) | If the client supports **MCP elicitation**, the server shows the user a "Save this entry?" dialog itself, so the model can't skip it. Otherwise the client's tool-approval prompt for `save_qa` is the confirmation. |
+| `elicitation` | Only through elicitation. Clients without it get a pending entry for the user to approve with `rag qa approve <id>`. |
+| `tool_approval` | The client's approval of the `save_qa` call is the confirmation. Don't auto-approve `save_qa` in your client. |
+| `cli` | Only `rag qa approve <id>` in a terminal; `save_qa` is not offered. |
+
+Each saved entry records how it was confirmed (`confirmed_via`).
+
 ## CLI
 
 | Command | What it does |
 |---|---|
+| `rag init [--path P] [--force]` | Write a starter config (default: the per-user config folder) |
 | `rag index [--source S] [--rechunk] [--force-extract] [--no-prune]` | Manual (re)index; unchanged files are skipped |
 | `rag status` | Counts per source, model lock state, pending Q&A |
 | `rag search SOURCE QUERY [--mode] [--top-k] [--offset] [--rerank] [--json]` | Search from the terminal |
@@ -100,7 +203,7 @@ More results available: call again with offset=5.
 | `rag qa pending \| approve ID \| reject ID \| list \| delete ID` | Review the Q&A base |
 | `rag eval [--modes ...] [--top-k 5] [--rerank] [--set k=v] [--baseline run.json] [--label name]` | Measure retrieval quality |
 | `rag check [--chat]` | Provider connectivity |
-| `rag serve` / `rag-mcp` | Run the MCP server (stdio) |
+| `knowledge-mcp [--transport stdio\|streamable-http\|sse] [--host] [--port]` | Run the MCP server (also `rag serve ...`, `rag-mcp`, `python -m rag_mcp.server`) |
 
 ## Switching to the internal endpoint (R2)
 
@@ -143,6 +246,9 @@ Cohere style), set `rerank.method = "endpoint"` and `rerank.model`.
   embeddings are unreachable, hybrid falls back to keyword search with a warning.
 * **Q&A base** (`rag_mcp/qa.py`): proposals are pending in SQLite. Confirmed entries are written
   to `data/qa/qa-NNNNNN.json` (the source of truth, survives an index rebuild) and indexed as source `qa`.
+* **Server** (`rag_mcp/server.py`) is built on the official MCP Python SDK (works with 1.x and 2.x).
+  It supports stdio, streamable HTTP and SSE, tool annotations, structured tool output, a prompt,
+  and elicitation for Q&A confirmation.
 
 ## Evaluation (R12)
 
@@ -179,18 +285,20 @@ pip install -e ".[docx,dev]"
 pytest -q
 ```
 
-The 39 tests run fully offline against a fake OpenAI-compatible HTTP endpoint
+The 54 tests run fully offline against a fake OpenAI-compatible HTTP endpoint
 (`tests/fake_openai.py`). That also exercises the config-only provider switch. They cover
 extraction for every format, chunking, incremental indexing, the model lock and re-embedding,
-all search modes, paging, citations, both rerank methods, the Q&A flow, the evaluation, and
-an end-to-end MCP stdio session. They pass with MCP SDK 1.x and 2.x.
+all search modes, paging, citations, both rerank methods, the evaluation, and real MCP
+sessions over stdio, streamable HTTP and SSE. The MCP tests include every Q&A confirmation
+mode, with clients that do and don't support elicitation, plus structured output, the
+prompt, and config discovery. They pass with MCP SDK 1.x and 2.x.
 `examples/demo_client.py` runs example tool calls through a real stdio MCP session.
 
 ## Requirement map
 
 | Req | Where |
 |---|---|
-| R1 local only | SQLite file + numpy + FTS5; stdio server; `pip install`, no Docker |
+| R1 local only | SQLite file + numpy + FTS5; stdio (or localhost HTTP) server; `pip install`, no Docker |
 | R2 one provider interface | `provider.py` `OpenAICompatibleProvider`; `[provider]` config only |
 | R3 non-confidential dev data | `testdata/` (fictional) |
 | R4 one tool per source | `server.py` registers `search_<source>` per `[[sources]]` |
@@ -199,11 +307,12 @@ an end-to-end MCP stdio session. They pass with MCP SDK 1.x and 2.x.
 | R7 citations | every hit: source, document, location (pages / heading path) |
 | R8 extraction JSON per document | `data/extracted/…json`, reused by `--rechunk` and `reembed` |
 | R9 model lock | `store.py` `check_model` / `embedding_lock`; `rag reembed --switch-model` |
-| R10 Q&A after confirmation | `propose_qa` → user confirms → `save_qa` / `rag qa approve` |
+| R10 Q&A after confirmation | `propose_qa` → user confirms (MCP elicitation, tool approval or `rag qa approve`) |
 | R11 manual, incremental re-index | `rag index` (mtime/size → sha256 → chunk signature) |
 | R12 measured evaluation | `rag eval`, `eval/questions.jsonl`, `eval/runs/` |
 
 ### Path to the LibreChat knowledge service
-The core (`App`: store, indexer, search engine, Q&A) is independent of MCP and stdio. A later
-shared service can wrap the same `SearchEngine` behind HTTP, swap SQLite/numpy for a server
-database, and add access control, without changing extraction, chunking or the eval set.
+LibreChat can already connect over streamable HTTP for a single user. The core (`App`: store,
+indexer, search engine, Q&A) is independent of the MCP transport. A later shared service can
+add authentication and access control in front of the same server, swap SQLite/numpy for a
+server database, and keep extraction, chunking and the eval set unchanged.

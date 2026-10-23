@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "knowledge-mcp"
 version = "0.1.0"
-description = "Local RAG MCP server (SQLite + OpenAI-compatible embeddings) for Cline"
+description = "Local RAG knowledge base served over MCP to any MCP-compatible client (SQLite + OpenAI-compatible embeddings)"
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.10",
@@ -23,9 +23,13 @@ dev = ["pytest>=8", "fpdf2>=2.7", "python-docx>=1.0"]
 [project.scripts]
 rag = "rag_mcp.cli:main"
 rag-mcp = "rag_mcp.server:main"
+knowledge-mcp = "rag_mcp.server:main"
 
 [tool.setuptools.packages.find]
 include = ["rag_mcp*"]
+
+[tool.setuptools.package-data]
+rag_mcp = ["config_template.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

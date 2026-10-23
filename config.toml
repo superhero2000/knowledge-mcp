@@ -1,4 +1,4 @@
-# Local RAG MCP configuration.
+# knowledge-mcp configuration (uses the bundled synthetic test data).
 # Relative paths are resolved against the directory of this file.
 
 [storage]
@@ -56,7 +56,13 @@ endpoint_path = "/rerank"
 candidates    = 30
 
 [qa]
-cli_confirmation_only = false   # true: Q&A can only be approved via `rag qa approve <id>`
+confirmation = "auto"   # auto | elicitation | tool_approval | cli (see README)
+
+[server]
+transport    = "stdio"      # stdio | streamable-http | sse
+host         = "127.0.0.1"
+port         = 8765
+allow_remote = false        # HTTP has no authentication
 
 # ---------------------------------------------------------------------------
 # Sources: each becomes one MCP tool `search_<name>` (R4).

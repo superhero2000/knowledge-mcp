@@ -1,4 +1,4 @@
-"""A short scripted MCP session (stdio, like Cline) used for demos.
+"""A short scripted MCP session over stdio, used for demos.
 
 Usage:
     python examples/mcp_tour.py tools                 # list the tools the server exposes

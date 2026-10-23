@@ -67,14 +67,14 @@ def shorten_results(max_text_lines):
     return f
 
 
-title("knowledge-mcp", "A local RAG knowledge base for Cline, served over MCP",
+title("knowledge-mcp", "A local RAG knowledge base for any MCP client",
       ["Python only · one SQLite file · no Docker",
        "Only embeddings / optional reranking call the model provider",
        "Every answer comes with a citation"])
 
 title("Architecture", "Everything runs on the developer machine except model inference",
       ["files  →  extraction JSON  →  chunks  →  embeddings  →  SQLite (FTS5 + vectors)",
-       "Cline  ⇄  rag-mcp (stdio)  →  search_<source> tools with citations",
+       "any MCP client  ⇄  knowledge-mcp (stdio or HTTP)  →  search_<source> tools with citations",
        "Provider: OpenAI today, internal OpenAI-compatible endpoint tomorrow (config only)"],
       req="R1 · R2")
 
@@ -104,7 +104,7 @@ cmd("Running it again: unchanged files are skipped, nothing is re-embedded", "ra
 
 cmd("Index status and the embedding model lock", "rag status", req="R9", highlight=["model lock"])
 
-cmd("Cline sees one search tool per source (MCP over stdio)", "python examples/mcp_tour.py tools", req="R4",
+cmd("Any MCP client sees one search tool per source", "python examples/mcp_tour.py tools", req="R4",
     highlight=["search_"])
 
 cmd("Hybrid search (default) via MCP — every hit carries a citation",
